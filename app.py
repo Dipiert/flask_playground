@@ -1,12 +1,12 @@
 from flask import Flask, jsonify, request
 from werkzeug.security import generate_password_hash
 from flask_playground.models import Employee, User
-import jwt
+from flask_playground.auth import token_required
 import datetime
 import configparser
-from functools import wraps
+import jwt
 import os
-from flask_playground.db import db_session
+from flask_playground.db import get_db_session
 
 
 def create_app():
@@ -22,53 +22,34 @@ def create_app():
 app = create_app()
 
 
-# TODO: Move this to an auth related module
-def token_required(f):
-    @wraps(f)
-    def decorated(*args, **kwargs):
-        token = None
-        if "Authorization" in request.headers:
-            token = request.headers["Authorization"].split(" ")[1]
-        if not token:
-            return {
-               "message": "Authentication Token is missing!",
-               "data": None,
-               "error": "Unauthorized"
-            }, 401
-        try:
-            data = jwt.decode(token, app.config["JWT_SECRET_KEY"], algorithms=["HS256"])
-            current_user = User.query.filter_by(user=data["username"]).first()
-            if current_user is None:
-                return {
-                   "message": "Invalid Authentication token!",
-                   "data": None,
-                   "error": "Unauthorized"
-                }, 401
-        except Exception as e:
-            return {
-               "message": "Something went wrong",
-               "data": None,
-               "error": str(e)
-            }, 500
+def get_user_by_username(username):
+    return get_db_session().query(User.id).filter_by(user=username).first()
 
-        return f(current_user, *args, **kwargs)
-    return decorated
+
+def write_user(new_user):
+    db_session = get_db_session()
+    db_session.add(new_user)
+    db_session.commit()
 
 
 @app.post('/user/new')
 def create_user():
-    user = request.json.get('user')
+    user = request.json.get('username')
+    if get_user_by_username(user):
+        return {
+           "message": f"User {user} already exists",
+        }, 200
     password = request.json.get('password')
     registered_at = datetime.datetime.utcnow()
     hashed_password = generate_password_hash(password, method='sha256')
     new_user = User(user=user, password=hashed_password, registered_at=registered_at)
-    db_session.add(new_user)
-    db_session.commit()
+    write_user(new_user)
     return jsonify({'message': 'registered successfully'})
 
 
 @app.post('/employee/new')
 def new_employee():
+    db_session = get_db_session()
     names = request.json.get("employee_names")
     last_names = request.json.get("employee_last_names")
     usd_monthly_salary = request.json.get("employee_usd_monthly_salary")
@@ -82,9 +63,10 @@ def new_employee():
 
 @app.get('/salaries')
 @token_required
-def get_salaries():
+def get_salaries(current_user):
+    db_session = get_db_session()
     gt = request.json.get('greater_than', 0)
-    employees_query = db.session.query(Employee)
+    employees_query = db_session.query(Employee)
     employees = employees_query.filter(Employee.usd_monthly_salary > gt).all()
     return jsonify({
         'employees': [e.serialize() for e in employees]
@@ -93,6 +75,7 @@ def get_salaries():
 
 @app.post('/login')
 def login():
+    db_session = get_db_session()
     try:
         data = request.get_json()
         username = data.get('username')
@@ -103,7 +86,7 @@ def login():
                "error": "Bad request"
             }, 400
 
-        user = db.session.query(User).filter(User.user == username).first()
+        user = db_session.query(User).filter(User.user == username).first()
 
         logged_user = User().login(
             user,
@@ -140,6 +123,7 @@ def login():
 
 @app.teardown_appcontext
 def shutdown_session(exception=None):
+    db_session = get_db_session()
     db_session.remove()
 
 

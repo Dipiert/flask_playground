@@ -26,7 +26,7 @@ class Employee(Base):
 class User(Base):
     __tablename__ = 'users'
     id = Column(Integer, Sequence('id_seq'), primary_key=True)
-    user = Column(String(35))
+    user = Column(String(35), unique=True)
     password = Column(String(88))
     registered_at = Column(DateTime())
     token = None

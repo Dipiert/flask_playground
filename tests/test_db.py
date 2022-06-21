@@ -1,24 +1,37 @@
-import unittest
 import configparser
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, scoped_session
 from flask_playground import models
+from flask_playground.models import Base
 import os
 import pytest as pytest
+from flask_playground.db import get_db_session
+from flask import g, current_app
+from flask_playground.app import app
 
 
 @pytest.fixture(scope='session')
 def connection():
     config = configparser.ConfigParser()
-    config.read(os.path.join(os.path.dirname(__file__), '..', 'settings.env'))
-    DB_USER = config['test_db']['user']
-    DB_PASS = config['test_db']['pass']
-    DB_HOST = config['test_db']['host']
-    DB_PORT = config['test_db']['port']
-    DB_NAME = config['test_db']['name']
+    config.read(os.path.join(os.path.dirname(__file__), 'settings.env'))
+    app.config['DB_USER'] = config['db']['user']
+    app.config['DB_PASS'] = config['db']['pass']
+    app.config['DB_HOST'] = config['db']['host']
+    app.config['DB_PORT'] = config['db']['port']
+    app.config['DB_NAME'] = config['db']['name']
     engine = create_engine(
-        f"postgresql://{DB_USER}:{DB_PASS}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
+        f"postgresql://{app.config['DB_USER']}:{app.config['DB_PASS']}"
+        f"@{app.config['DB_HOST']}:{app.config['DB_PORT']}/"
+        f"{app.config['DB_NAME']}"
     )
+    db_session = scoped_session(
+                 sessionmaker(
+                     autocommit=False,
+                     autoflush=False,
+                     bind=engine
+                 )
+             )
+    Base.query = db_session.query_property()
     return engine.connect()
 
 
