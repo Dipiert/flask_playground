@@ -1,21 +1,24 @@
+import configparser
+import datetime
+import os
+
+import jwt
 from flask import Flask, jsonify, request
 from werkzeug.security import generate_password_hash
-from flask_playground.models import Employee, User
+
 from flask_playground.auth import token_required
-import datetime
-import configparser
-import jwt
-import os
 from flask_playground.db import get_db_session
+from flask_playground.models import Employee, User
 
 
 def create_app():
+    """" Creates a flask app and configure webserver based on settings.env file """
     app = Flask(__name__)
-    CONFIG = configparser.ConfigParser()
-    CONFIG.read(os.path.join(os.path.dirname(__file__), 'settings.env'))
-    app.config['JWT_SECRET_KEY'] = CONFIG['webserver']['JWT_SECRET_KEY']
-    app.config['JWT_ALGORITHM'] = CONFIG['webserver']['JWT_ALGORITHM']
-    app.config['DEBUG'] = CONFIG['webserver']['debug']
+    config = configparser.ConfigParser()
+    config.read(os.path.join(os.path.dirname(__file__), 'settings.env'))
+    app.config['JWT_SECRET_KEY'] = config['webserver']['JWT_SECRET_KEY']
+    app.config['JWT_ALGORITHM'] = config['webserver']['JWT_ALGORITHM']
+    app.config['DEBUG'] = config['webserver']['debug']
     return app
 
 
@@ -23,10 +26,12 @@ app = create_app()
 
 
 def get_user_by_username(username):
+    """" Access db to get a user object from its username """
     return get_db_session().query(User.id).filter_by(user=username).first()
 
 
 def write_user(new_user):
+    """" Writes into db the user passed as parameter """
     db_session = get_db_session()
     db_session.add(new_user)
     db_session.commit()
@@ -34,12 +39,18 @@ def write_user(new_user):
 
 @app.post('/user/new')
 def create_user():
+    """" Creates a user and store it in db if username doesn't exist and both username and password where provided """
     user = request.json.get('username')
+    password = request.json.get('password')
+    if not user or not password:
+        return {
+            "message": "Both user and password are required",
+        }, 200
     if get_user_by_username(user):
         return {
            "message": f"User {user} already exists",
         }, 200
-    password = request.json.get('password')
+
     registered_at = datetime.datetime.utcnow()
     hashed_password = generate_password_hash(password, method='sha256')
     new_user = User(user=user, password=hashed_password, registered_at=registered_at)
@@ -49,6 +60,7 @@ def create_user():
 
 @app.post('/employee/new')
 def new_employee():
+    """" Creates an employee object based on employee names, last names and their USD monthly salary """
     db_session = get_db_session()
     names = request.json.get("employee_names")
     last_names = request.json.get("employee_last_names")
@@ -64,6 +76,7 @@ def new_employee():
 @app.get('/salaries')
 @token_required
 def get_salaries(current_user):
+    """" It requires JWT Auth. Provides a list of salaries greater than greater_than param which defaults to 0 """
     db_session = get_db_session()
     gt = request.json.get('greater_than', 0)
     employees_query = db_session.query(Employee)
@@ -75,6 +88,7 @@ def get_salaries(current_user):
 
 @app.post('/login')
 def login():
+    """" This method will return a JWT token when usernames exists in db and their passwords match """
     db_session = get_db_session()
     try:
         data = request.get_json()
@@ -88,7 +102,7 @@ def login():
 
         user = db_session.query(User).filter(User.user == username).first()
 
-        logged_user = User().login(
+        logged_user = User.login(
             user,
             data.get('password')
         )
@@ -123,6 +137,7 @@ def login():
 
 @app.teardown_appcontext
 def shutdown_session(exception=None):
+    """" When application context is popped. This function will be called to remove db session """
     db_session = get_db_session()
     db_session.remove()
 

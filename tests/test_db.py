@@ -1,13 +1,13 @@
 import configparser
+import os
+
+import pytest as pytest
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, scoped_session
+
 from flask_playground import models
-from flask_playground.models import Base
-import os
-import pytest as pytest
-from flask_playground.db import get_db_session
-from flask import g, current_app
 from flask_playground.app import app
+from flask_playground.models import Base
 
 
 @pytest.fixture(scope='session')

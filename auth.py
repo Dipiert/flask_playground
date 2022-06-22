@@ -1,11 +1,14 @@
-from flask import request, current_app
 from functools import wraps
+
 import jwt
-from flask_playground.models import User
+from flask import request, current_app
+
 from flask_playground.db import get_db_session
+from flask_playground.models import User
 
 
 def token_required(f):
+    """ Meant to be used as decorator. Checks that current user can access to a resource (JWT token in header). """
     @wraps(f)
     def decorated(*args, **kwargs):
         db_session = get_db_session()

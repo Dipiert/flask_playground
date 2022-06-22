@@ -1,5 +1,5 @@
-from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy import Column, Sequence, Integer, String, Float, DateTime
+from sqlalchemy.ext.declarative import declarative_base
 from werkzeug.security import check_password_hash
 
 Base = declarative_base()
@@ -31,10 +31,12 @@ class User(Base):
     registered_at = Column(DateTime())
     token = None
 
-    def login(self, user, password):
+    @staticmethod
+    def login(user, password):
         """Login a user"""
         if user and check_password_hash(user.password, password):
             return user
+        return None
 
     def serialize(self):
         return {
@@ -42,4 +44,3 @@ class User(Base):
             'registered_at': self.registered_at,
             'token': self.token
         }
-
