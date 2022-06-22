@@ -6,6 +6,8 @@ from flask import Flask
 
 import flask_playground.db
 from flask_playground.app import app as _app
+from flask_playground.app import get_user_by_username
+from flask_playground.tests.test_db import connection, db_session, setup_database
 
 
 @pytest.fixture()
@@ -28,7 +30,7 @@ def runner(app):
 
 def test_users_can_be_created(client, connection):
     response = client.post("/user/new", json={
-        'user': 'dam',
+        'username': 'dam',
         'password': 'dam',
     })
     assert response.status_code, 200
@@ -40,7 +42,7 @@ def test_app_factory(app):
 
 def test_user_successfully_created_when_it_doesnt_exist(client, db_session):
     response = client.post("/user/new", json={
-        'user': str(uuid.uuid4())[:35],
+        'username': str(uuid.uuid4())[:35],
         'password': 'x',
     })
     assert 'successfully' in response.json.get('message')
@@ -50,7 +52,7 @@ def test_user_successfully_created_when_it_doesnt_exist(client, db_session):
 def test_usernames_are_unique(get_user_by_username, client):
     get_user_by_username.return_value = True
     response = client.post("/user/new", json={
-        'user': 'x',
+        'username': 'x',
         'password': 'x',
     })
     assert 'already exists' in response.json.get('message')
@@ -64,3 +66,14 @@ def test_usernames_are_unique(get_user_by_username, client):
 def test_user_and_pwd_fields_are_mandatory(json, client):
     response = client.post("/user/new", json=json)
     assert 'Both user and password are required' in response.json.get('message')
+
+
+def test_get_user_by_username(client, app):
+    username = str(uuid.uuid4())[:35]
+    with app.app_context():
+        assert not get_user_by_username(username)
+        response = client.post("/user/new", json={
+            'username': username,
+            'password': 'x',
+        })
+        assert get_user_by_username(username)
